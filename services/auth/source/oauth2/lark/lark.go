@@ -1,20 +1,21 @@
 package lark
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/markbates/goth"
+	"golang.org/x/oauth2"
 	"io"
 	"net/http"
 	"strings"
-
-	"github.com/markbates/goth"
-	"golang.org/x/oauth2"
+	"time"
 )
 
 type GrantType string
 
 const (
+	appAccessTokenURL string = "https://open.feishu.cn/open-apis/auth/v3/app_access_token/internal/" // 自建应用获取 app_access_token
+
 	authURL         string = "https://open.feishu.cn/open-apis/authen/v1/authorize"                 // 获取授权登录授权码
 	tokenURL        string = "https://open.feishu.cn/open-apis/authen/v1/oidc/access_token"         // 获取 user_access_token
 	refreshTokenURL string = "https://open.feishu.cn/open-apis/authen/v1/oidc/refresh_access_token" // 刷新 user_access_token
@@ -29,6 +30,8 @@ type Provider struct {
 	HTTPClient   *http.Client
 	config       *oauth2.Config
 	providerName string
+
+	appAccessToken *appAccessToken
 }
 
 func New(clientKey, secret, callbackURL string, scopes ...string) *Provider {
@@ -39,6 +42,7 @@ func New(clientKey, secret, callbackURL string, scopes ...string) *Provider {
 		providerName: "lark",
 	}
 	p.config = newConfig(p, authURL, tokenURL, scopes)
+	p.appAccessToken = NewAppAccessToken(p.Client())
 	return p
 }
 
@@ -60,6 +64,10 @@ func newConfig(provider *Provider, authURL, tokenURL string, scopes []string) *o
 		}
 	}
 	return c
+}
+
+func (p *Provider) Client() *http.Client {
+	return goth.HTTPClientWithFallBack(p.HTTPClient)
 }
 
 func (p *Provider) Name() string {
@@ -85,28 +93,35 @@ func (p *Provider) UnmarshalSession(data string) (goth.Session, error) {
 func (p *Provider) Debug(b bool) {
 }
 
-type refreshTokenReq struct {
-	GrantType    string `json:"grant_type"`
-	RefreshToken string `json:"refresh_token"`
+type oAuthResponse[T any] struct {
+	Code int    `json:"code"`
+	Msg  string `json:"msg"`
+	Data T      `json:"data"`
+}
+
+type refreshTokenResp struct {
+	AccessToken      string `json:"access_token"`
+	RefreshToken     string `json:"refresh_token"`
+	TokenType        string `json:"token_type"`
+	ExpiresIn        int    `json:"expires_in"`
+	RefreshExpiresIn int    `json:"refresh_expires_in"`
+	Scope            string `json:"scope"`
 }
 
 func (p *Provider) RefreshToken(refreshToken string) (*oauth2.Token, error) {
-	apiURL := refreshTokenURL
-	body := strings.NewReader(`{"grant_type":"refresh_token","refresh_token":"` + refreshToken + `"}`)
+	if err := p.appAccessToken.getAppAccessToken(p.ClientKey, p.Secret); err != nil {
+		return nil, fmt.Errorf("failed to get app access token: %w", err)
+	}
+	reqBody := strings.NewReader(`{"grant_type":"refresh_token","refresh_token":"` + refreshToken + `"}`)
 
-	req, err := http.NewRequest(http.MethodPost, apiURL, body)
+	req, err := http.NewRequest(http.MethodPost, refreshTokenURL, reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create refresh token request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+p.)
+	req.Header.Set("Authorization", "Bearer "+p.appAccessToken.Token)
 
-	client := p.HTTPClient
-	if client == nil {
-		client = http.DefaultClient
-	}
-
-	resp, err := client.Do(req)
+	resp, err := p.Client().Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send refresh token request: %w", err)
 	}
@@ -116,13 +131,22 @@ func (p *Provider) RefreshToken(refreshToken string) (*oauth2.Token, error) {
 		return nil, fmt.Errorf("unexpected status code while refreshing token: %d", resp.StatusCode)
 	}
 
-	var refreshedToken oauth2.Token
-	err = json.NewDecoder(resp.Body).Decode(&refreshedToken)
+	var oauthResp oAuthResponse[refreshTokenResp]
+	err = json.NewDecoder(resp.Body).Decode(&oauthResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode refreshed token: %w", err)
 	}
+	if oauthResp.Code != 0 {
+		return nil, fmt.Errorf("failed to refresh token: code:%v msg: %s", oauthResp.Code, oauthResp.Msg)
+	}
 
-	return &refreshedToken, nil
+	token := oauth2.Token{
+		AccessToken:  oauthResp.Data.AccessToken,
+		RefreshToken: oauthResp.Data.RefreshToken,
+		Expiry:       time.Now().Add(time.Duration(oauthResp.Data.ExpiresIn) * time.Second),
+	}
+
+	return &token, nil
 }
 
 func (p *Provider) RefreshTokenAvailable() bool {
