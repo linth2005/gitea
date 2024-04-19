@@ -2,13 +2,16 @@ package lark
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"sync"
 	"time"
+
+	"code.gitea.io/gitea/modules/json"
 )
+
+// 自建应用获取 app_access_token
+const appAccessTokenURL string = "https://open.feishu.cn/open-apis/auth/v3/app_access_token/internal/"
 
 type appAccessTokenReq struct {
 	AppID     string `json:"app_id"`     // 自建应用的 app_id
@@ -26,27 +29,20 @@ type appAccessToken struct {
 	Token     string
 	ExpiresAt time.Time
 	rMutex    sync.RWMutex
-
-	HTTPClient *http.Client
 }
 
-func NewAppAccessToken(client *http.Client) *appAccessToken {
-	return &appAccessToken{
-		HTTPClient: client,
-	}
-}
-
-func (a *appAccessToken) getAppAccessToken(clientId, secret string) error {
+// GetAppAccessToken 获取飞书自建应用令牌
+func (p *Provider) GetAppAccessToken(clientID, secret string) error {
 	// 从本地缓存中获取 app access token
-	a.rMutex.RLock()
-	if time.Now().Before(a.ExpiresAt) {
-		a.rMutex.RUnlock()
+	p.appAccessToken.rMutex.RLock()
+	if time.Now().Before(p.appAccessToken.ExpiresAt) {
+		p.appAccessToken.rMutex.RUnlock()
 		return nil
 	}
-	a.rMutex.RUnlock()
+	p.appAccessToken.rMutex.RUnlock()
 
 	reqBody, err := json.Marshal(&appAccessTokenReq{
-		AppID:     clientId,
+		AppID:     clientID,
 		AppSecret: secret,
 	})
 	if err != nil {
@@ -59,7 +55,7 @@ func (a *appAccessToken) getAppAccessToken(clientId, secret string) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := a.HTTPClient.Do(req)
+	resp, err := p.HTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send app access token request: %w", err)
 	}
@@ -80,18 +76,10 @@ func (a *appAccessToken) getAppAccessToken(clientId, secret string) error {
 
 	// 更新本地缓存
 	expirationDuration := time.Duration(tokenResp.Expire) * time.Second
-	a.rMutex.Lock()
-	a.Token = tokenResp.AppAccessToken
-	a.ExpiresAt = time.Now().Add(expirationDuration)
-	a.rMutex.Unlock()
+	p.appAccessToken.rMutex.Lock()
+	p.appAccessToken.Token = tokenResp.AppAccessToken
+	p.appAccessToken.ExpiresAt = time.Now().Add(expirationDuration)
+	p.appAccessToken.rMutex.Unlock()
 
 	return nil
-}
-
-func (a *appAccessToken) Get(s string) string {
-	return a.Token
-}
-
-func (a *appAccessToken) setValue(values url.Values) {
-	values.Set("app_access_token", a.Token)
 }
