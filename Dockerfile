@@ -16,7 +16,8 @@ RUN apk --no-cache add \
     nodejs \
     npm \
     && npm install -g pnpm@10 \
-    && rm -rf /var/cache/apk/*
+    && rm -rf /var/cache/apk/* \
+COPY .npmrc /root/.npmrc
 
 # Setup repo
 COPY . ${GOPATH}/src/code.gitea.io/gitea

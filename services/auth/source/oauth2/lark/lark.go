@@ -11,11 +11,7 @@ import (
 	"time"
 )
 
-type GrantType string
-
 const (
-	appAccessTokenURL string = "https://open.feishu.cn/open-apis/auth/v3/app_access_token/internal/" // 自建应用获取 app_access_token
-
 	authURL         string = "https://open.feishu.cn/open-apis/authen/v1/authorize"                 // 获取授权登录授权码
 	tokenURL        string = "https://open.feishu.cn/open-apis/authen/v1/oidc/access_token"         // 获取 user_access_token
 	refreshTokenURL string = "https://open.feishu.cn/open-apis/authen/v1/oidc/refresh_access_token" // 刷新 user_access_token
@@ -42,7 +38,6 @@ func New(clientKey, secret, callbackURL string, scopes ...string) *Provider {
 		providerName: "lark",
 	}
 	p.config = newConfig(p, authURL, tokenURL, scopes)
-	p.appAccessToken = NewAppAccessToken(p.Client())
 	return p
 }
 
@@ -93,13 +88,7 @@ func (p *Provider) UnmarshalSession(data string) (goth.Session, error) {
 func (p *Provider) Debug(b bool) {
 }
 
-type oAuthResponse[T any] struct {
-	Code int    `json:"code"`
-	Msg  string `json:"msg"`
-	Data T      `json:"data"`
-}
-
-type refreshTokenResp struct {
+type getAccessTokenResp struct {
 	AccessToken      string `json:"access_token"`
 	RefreshToken     string `json:"refresh_token"`
 	TokenType        string `json:"token_type"`
@@ -109,7 +98,7 @@ type refreshTokenResp struct {
 }
 
 func (p *Provider) RefreshToken(refreshToken string) (*oauth2.Token, error) {
-	if err := p.appAccessToken.getAppAccessToken(p.ClientKey, p.Secret); err != nil {
+	if err := p.GetAppAccessToken(p.ClientKey, p.Secret); err != nil {
 		return nil, fmt.Errorf("failed to get app access token: %w", err)
 	}
 	reqBody := strings.NewReader(`{"grant_type":"refresh_token","refresh_token":"` + refreshToken + `"}`)
@@ -119,7 +108,7 @@ func (p *Provider) RefreshToken(refreshToken string) (*oauth2.Token, error) {
 		return nil, fmt.Errorf("failed to create refresh token request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+p.appAccessToken.Token)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", p.appAccessToken.Token))
 
 	resp, err := p.Client().Do(req)
 	if err != nil {
@@ -131,7 +120,7 @@ func (p *Provider) RefreshToken(refreshToken string) (*oauth2.Token, error) {
 		return nil, fmt.Errorf("unexpected status code while refreshing token: %d", resp.StatusCode)
 	}
 
-	var oauthResp oAuthResponse[refreshTokenResp]
+	var oauthResp commResponse[getAccessTokenResp]
 	err = json.NewDecoder(resp.Body).Decode(&oauthResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode refreshed token: %w", err)
@@ -204,6 +193,9 @@ func (p *Provider) FetchUser(session goth.Session) (goth.User, error) {
 	user.AvatarURL = u.AvatarURL
 
 	responseBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return user, fmt.Errorf("failed to read response body: %w", err)
+	}
 	if err = json.Unmarshal(responseBytes, &user.RawData); err != nil {
 		return user, err
 	}
