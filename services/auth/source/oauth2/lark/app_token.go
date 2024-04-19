@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 )
@@ -85,4 +86,12 @@ func (a *appAccessToken) getAppAccessToken(clientId, secret string) error {
 	a.rMutex.Unlock()
 
 	return nil
+}
+
+func (a *appAccessToken) Get(s string) string {
+	return a.Token
+}
+
+func (a *appAccessToken) setValue(values url.Values) {
+	values.Set("app_access_token", a.Token)
 }

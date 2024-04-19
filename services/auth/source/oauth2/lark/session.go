@@ -3,15 +3,17 @@ package lark
 import (
 	"encoding/json"
 	"errors"
-	"github.com/markbates/goth"
 	"time"
+
+	"github.com/markbates/goth"
 )
 
 type Session struct {
-	AuthURL      string
-	AccessToken  string
-	RefreshToken string
-	ExpiresAt    time.Time
+	AuthURL               string
+	AccessToken           string
+	RefreshToken          string
+	ExpiresAt             time.Time
+	RefreshTokenExpiresAt time.Time
 }
 
 func (s *Session) GetAuthURL() (string, error) {
@@ -34,8 +36,13 @@ func (s *Session) Authorize(provider goth.Provider, params goth.Params) (string,
 	}
 
 	if !token.Valid() {
-		return "", errors.New("Invalid token received from provider")
+		return "", errors.New("invalid token received from provider")
 	}
-	s.Token = token.AccessToken
+
+	s.AccessToken = token.AccessToken
+	s.RefreshToken = token.RefreshToken
+	s.ExpiresAt = token.Expiry
+	refreshExpiresIn := token.Extra("refresh_expires_in").(int64)
+	s.RefreshTokenExpiresAt = time.Now().Add(time.Duration(refreshExpiresIn) * time.Second)
 	return token.AccessToken, nil
 }

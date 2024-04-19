@@ -3,12 +3,14 @@ package lark
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/markbates/goth"
-	"golang.org/x/oauth2"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
+
+	"github.com/markbates/goth"
+	"golang.org/x/oauth2"
 )
 
 type GrantType string
@@ -79,8 +81,19 @@ func (p *Provider) SetName(name string) {
 }
 
 func (p *Provider) BeginAuth(state string) (goth.Session, error) {
+	// 生成授权登录 URL
+	u, err := url.Parse(p.config.AuthCodeURL(state))
+	if err != nil {
+		panic(err)
+	}
+	query := u.Query()
+	query.Del("response_type")
+	query.Del("client_id")
+	query.Add("app_id", p.ClientKey)
+	u.RawQuery = query.Encode()
+
 	return &Session{
-		AuthURL: p.config.AuthCodeURL(state),
+		AuthURL: u.String(),
 	}, nil
 }
 
