@@ -34,10 +34,11 @@ type Provider struct {
 
 func New(clientKey, secret, callbackURL string, scopes ...string) *Provider {
 	p := &Provider{
-		ClientKey:    clientKey,
-		Secret:       secret,
-		CallbackURL:  callbackURL,
-		providerName: "lark",
+		ClientKey:      clientKey,
+		Secret:         secret,
+		CallbackURL:    callbackURL,
+		providerName:   "lark",
+		appAccessToken: &appAccessToken{},
 	}
 	p.config = newConfig(p, authURL, tokenURL, scopes)
 	return p
@@ -183,9 +184,8 @@ func (p *Provider) FetchUser(session goth.Session) (goth.User, error) {
 		return user, fmt.Errorf("%s failed to create request: %w", p.providerName, err)
 	}
 	req.Header.Set("Authorization", "Bearer "+user.AccessToken)
-	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := p.HTTPClient.Do(req)
+	resp, err := p.Client().Do(req)
 	if err != nil {
 		return user, fmt.Errorf("%s failed to get user information: %w", p.providerName, err)
 	}
@@ -195,8 +195,13 @@ func (p *Provider) FetchUser(session goth.Session) (goth.User, error) {
 		return user, fmt.Errorf("%s responded with a %d trying to fetch user information", p.providerName, resp.StatusCode)
 	}
 
+	responseBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return user, fmt.Errorf("failed to read response body: %w", err)
+	}
+
 	var u larkUser
-	if err = json.NewDecoder(resp.Body).Decode(&u); err != nil {
+	if err = json.Unmarshal(responseBytes, &u); err != nil {
 		return user, fmt.Errorf("failed to decode user info: %w", err)
 	}
 
@@ -205,10 +210,6 @@ func (p *Provider) FetchUser(session goth.Session) (goth.User, error) {
 	user.Email = u.Email
 	user.AvatarURL = u.AvatarURL
 
-	responseBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return user, fmt.Errorf("failed to read response body: %w", err)
-	}
 	if err = json.Unmarshal(responseBytes, &user.RawData); err != nil {
 		return user, err
 	}

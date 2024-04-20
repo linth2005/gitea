@@ -34,7 +34,7 @@ func (s *Session) Marshal() string {
 func (s *Session) Authorize(provider goth.Provider, params goth.Params) (string, error) {
 	p := provider.(*Provider)
 	reqBody := strings.NewReader(`{"grant_type":"authorization_code","code":"` + params.Get("code") + `"}`)
-	req, err := http.NewRequest(http.MethodPost, refreshTokenURL, reqBody)
+	req, err := http.NewRequest(http.MethodPost, tokenURL, reqBody)
 	if err != nil {
 		return "", fmt.Errorf("failed to create refresh token request: %w", err)
 	}

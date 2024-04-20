@@ -55,7 +55,7 @@ func (p *Provider) GetAppAccessToken(clientID, secret string) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := p.HTTPClient.Do(req)
+	resp, err := p.Client().Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send app access token request: %w", err)
 	}
