@@ -108,7 +108,7 @@ func init() {
 	))
 
 	RegisterGothProvider(NewSimpleProvider(
-		"lark", "飞书", []string{"contact:user.email:readonly", "contact:user.employee_id:readonly"},
+		"lark", "飞书", []string{"contact:user.employee_id:readonly"},
 		func(clientID, secret, callbackURL string, scopes ...string) goth.Provider {
 			return lark.New(clientID, secret, callbackURL, scopes...)
 		},

@@ -159,7 +159,7 @@ type larkUser struct {
 	UnionID   string `json:"union_id"`
 	UserID    string `json:"user_id"`
 	Name      string `json:"name"`
-	Email     string `json:"email"`
+	Email     string `json:"enterprise_email"`
 	AvatarURL string `json:"avatar_url"`
 	Mobile    string `json:"mobile,omitempty"`
 }
@@ -198,15 +198,20 @@ func (p *Provider) FetchUser(session goth.Session) (goth.User, error) {
 		return user, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	var u larkUser
-	if err = json.Unmarshal(responseBytes, &u); err != nil {
+	var oauthResp commResponse[larkUser]
+	if err = json.Unmarshal(responseBytes, &oauthResp); err != nil {
 		return user, fmt.Errorf("failed to decode user info: %w", err)
 	}
+	if oauthResp.Code != 0 {
+		return user, fmt.Errorf("failed to get user info: code:%v msg: %s", oauthResp.Code, oauthResp.Msg)
+	}
 
+	u := oauthResp.Data
 	user.UserID = u.UserID
 	user.Name = u.Name
 	user.Email = u.Email
 	user.AvatarURL = u.AvatarURL
+	user.NickName = u.Name
 
 	if err = json.Unmarshal(responseBytes, &user.RawData); err != nil {
 		return user, err
