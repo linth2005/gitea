@@ -226,7 +226,7 @@ func SearchServiceV3(ctx *context.Context) {
 
 // https://docs.microsoft.com/en-us/nuget/api/registration-base-url-resource#registration-index
 func RegistrationIndex(ctx *context.Context) {
-	packageName := ctx.Params("id")
+	packageName := ctx.PathParam("id")
 
 	pvs, err := packages_model.GetVersionsByPackageName(ctx, ctx.Package.Owner.ID, packages_model.TypeNuGet, packageName)
 	if err != nil {
@@ -254,12 +254,12 @@ func RegistrationIndex(ctx *context.Context) {
 
 // https://github.com/NuGet/NuGet.Client/blob/dev/src/NuGet.Core/NuGet.Protocol/LegacyFeed/V2FeedQueryBuilder.cs
 func RegistrationLeafV2(ctx *context.Context) {
-	packageName := ctx.Params("id")
-	packageVersion := ctx.Params("version")
+	packageName := ctx.PathParam("id")
+	packageVersion := ctx.PathParam("version")
 
 	pv, err := packages_model.GetVersionByNameAndVersion(ctx, ctx.Package.Owner.ID, packages_model.TypeNuGet, packageName, packageVersion)
 	if err != nil {
-		if err == packages_model.ErrPackageNotExist {
+		if errors.Is(err, packages_model.ErrPackageNotExist) {
 			apiError(ctx, http.StatusNotFound, err)
 			return
 		}
@@ -283,12 +283,12 @@ func RegistrationLeafV2(ctx *context.Context) {
 
 // https://docs.microsoft.com/en-us/nuget/api/registration-base-url-resource#registration-leaf
 func RegistrationLeafV3(ctx *context.Context) {
-	packageName := ctx.Params("id")
-	packageVersion := strings.TrimSuffix(ctx.Params("version"), ".json")
+	packageName := ctx.PathParam("id")
+	packageVersion := strings.TrimSuffix(ctx.PathParam("version"), ".json")
 
 	pv, err := packages_model.GetVersionByNameAndVersion(ctx, ctx.Package.Owner.ID, packages_model.TypeNuGet, packageName, packageVersion)
 	if err != nil {
-		if err == packages_model.ErrPackageNotExist {
+		if errors.Is(err, packages_model.ErrPackageNotExist) {
 			apiError(ctx, http.StatusNotFound, err)
 			return
 		}
@@ -381,7 +381,7 @@ func EnumeratePackageVersionsV2Count(ctx *context.Context) {
 
 // https://docs.microsoft.com/en-us/nuget/api/package-base-address-resource#enumerate-package-versions
 func EnumeratePackageVersionsV3(ctx *context.Context) {
-	packageName := ctx.Params("id")
+	packageName := ctx.PathParam("id")
 
 	pvs, err := packages_model.GetVersionsByPackageName(ctx, ctx.Package.Owner.ID, packages_model.TypeNuGet, packageName)
 	if err != nil {
@@ -401,9 +401,9 @@ func EnumeratePackageVersionsV3(ctx *context.Context) {
 // https://learn.microsoft.com/en-us/nuget/api/package-base-address-resource#download-package-manifest-nuspec
 // https://learn.microsoft.com/en-us/nuget/api/package-base-address-resource#download-package-content-nupkg
 func DownloadPackageFile(ctx *context.Context) {
-	packageName := ctx.Params("id")
-	packageVersion := ctx.Params("version")
-	filename := ctx.Params("filename")
+	packageName := ctx.PathParam("id")
+	packageVersion := ctx.PathParam("version")
+	filename := ctx.PathParam("filename")
 
 	s, u, pf, err := packages_service.GetFileStreamByPackageNameAndVersion(
 		ctx,
@@ -418,7 +418,7 @@ func DownloadPackageFile(ctx *context.Context) {
 		},
 	)
 	if err != nil {
-		if err == packages_model.ErrPackageNotExist || err == packages_model.ErrPackageFileNotExist {
+		if errors.Is(err, packages_model.ErrPackageNotExist) || errors.Is(err, packages_model.ErrPackageFileNotExist) {
 			apiError(ctx, http.StatusNotFound, err)
 			return
 		}
@@ -643,9 +643,9 @@ func processUploadedFile(ctx *context.Context, expectedType nuget_module.Package
 
 // https://github.com/dotnet/symstore/blob/main/docs/specs/Simple_Symbol_Query_Protocol.md#request
 func DownloadSymbolFile(ctx *context.Context) {
-	filename := ctx.Params("filename")
-	guid := ctx.Params("guid")[:32]
-	filename2 := ctx.Params("filename2")
+	filename := ctx.PathParam("filename")
+	guid := ctx.PathParam("guid")[:32]
+	filename2 := ctx.PathParam("filename2")
 
 	if filename != filename2 {
 		apiError(ctx, http.StatusBadRequest, nil)
@@ -671,7 +671,7 @@ func DownloadSymbolFile(ctx *context.Context) {
 
 	s, u, pf, err := packages_service.GetPackageFileStream(ctx, pfs[0])
 	if err != nil {
-		if err == packages_model.ErrPackageNotExist || err == packages_model.ErrPackageFileNotExist {
+		if errors.Is(err, packages_model.ErrPackageNotExist) || errors.Is(err, packages_model.ErrPackageFileNotExist) {
 			apiError(ctx, http.StatusNotFound, err)
 			return
 		}
@@ -685,8 +685,8 @@ func DownloadSymbolFile(ctx *context.Context) {
 // DeletePackage hard deletes the package
 // https://docs.microsoft.com/en-us/nuget/api/package-publish-resource#delete-a-package
 func DeletePackage(ctx *context.Context) {
-	packageName := ctx.Params("id")
-	packageVersion := ctx.Params("version")
+	packageName := ctx.PathParam("id")
+	packageVersion := ctx.PathParam("version")
 
 	err := packages_service.RemovePackageVersionByNameAndVersion(
 		ctx,
@@ -699,7 +699,7 @@ func DeletePackage(ctx *context.Context) {
 		},
 	)
 	if err != nil {
-		if err == packages_model.ErrPackageNotExist {
+		if errors.Is(err, packages_model.ErrPackageNotExist) {
 			apiError(ctx, http.StatusNotFound, err)
 			return
 		}
