@@ -20,6 +20,7 @@ import (
 	wiki_service "code.gitea.io/gitea/services/wiki"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -66,12 +67,9 @@ func assertWikiNotExists(t *testing.T, repo *repo_model.Repository, wikiName wik
 
 func assertPagesMetas(t *testing.T, expectedNames []string, metas any) {
 	pageMetas, ok := metas.([]PageMeta)
-	if !assert.True(t, ok) {
-		return
-	}
-	if !assert.Len(t, pageMetas, len(expectedNames)) {
-		return
-	}
+	require.True(t, ok)
+	require.Len(t, pageMetas, len(expectedNames))
+
 	for i, pageMeta := range pageMetas {
 		assert.EqualValues(t, expectedNames[i], pageMeta.Name)
 	}
@@ -81,12 +79,19 @@ func TestWiki(t *testing.T) {
 	unittest.PrepareTestEnv(t)
 
 	ctx, _ := contexttest.MockContext(t, "user2/repo1/wiki")
-	ctx.SetParams("*", "Home")
+	ctx.SetPathParam("*", "Home")
 	contexttest.LoadRepo(t, ctx, 1)
 	Wiki(ctx)
 	assert.EqualValues(t, http.StatusOK, ctx.Resp.Status())
 	assert.EqualValues(t, "Home", ctx.Data["Title"])
 	assertPagesMetas(t, []string{"Home", "Page With Image", "Page With Spaced Name", "Unescaped File"}, ctx.Data["Pages"])
+
+	ctx, _ = contexttest.MockContext(t, "user2/repo1/jpeg.jpg")
+	ctx.SetPathParam("*", "jpeg.jpg")
+	contexttest.LoadRepo(t, ctx, 1)
+	Wiki(ctx)
+	assert.EqualValues(t, http.StatusSeeOther, ctx.Resp.Status())
+	assert.Equal(t, "/user2/repo1/wiki/raw/jpeg.jpg", ctx.Resp.Header().Get("Location"))
 }
 
 func TestWikiPages(t *testing.T) {
@@ -128,7 +133,7 @@ func TestNewWikiPost(t *testing.T) {
 		NewWikiPost(ctx)
 		assert.EqualValues(t, http.StatusSeeOther, ctx.Resp.Status())
 		assertWikiExists(t, ctx.Repo.Repository, wiki_service.UserTitleToWebPath("", title))
-		assert.Equal(t, wikiContent(t, ctx.Repo.Repository, wiki_service.UserTitleToWebPath("", title)), content)
+		assert.Equal(t, content, wikiContent(t, ctx.Repo.Repository, wiki_service.UserTitleToWebPath("", title)))
 	}
 }
 
@@ -153,13 +158,20 @@ func TestEditWiki(t *testing.T) {
 	unittest.PrepareTestEnv(t)
 
 	ctx, _ := contexttest.MockContext(t, "user2/repo1/wiki/Home?action=_edit")
-	ctx.SetParams("*", "Home")
+	ctx.SetPathParam("*", "Home")
 	contexttest.LoadUser(t, ctx, 2)
 	contexttest.LoadRepo(t, ctx, 1)
 	EditWiki(ctx)
 	assert.EqualValues(t, http.StatusOK, ctx.Resp.Status())
 	assert.EqualValues(t, "Home", ctx.Data["Title"])
 	assert.Equal(t, wikiContent(t, ctx.Repo.Repository, "Home"), ctx.Data["content"])
+
+	ctx, _ = contexttest.MockContext(t, "user2/repo1/wiki/jpeg.jpg?action=_edit")
+	ctx.SetPathParam("*", "jpeg.jpg")
+	contexttest.LoadUser(t, ctx, 2)
+	contexttest.LoadRepo(t, ctx, 1)
+	EditWiki(ctx)
+	assert.EqualValues(t, http.StatusForbidden, ctx.Resp.Status())
 }
 
 func TestEditWikiPost(t *testing.T) {
@@ -169,7 +181,7 @@ func TestEditWikiPost(t *testing.T) {
 	} {
 		unittest.PrepareTestEnv(t)
 		ctx, _ := contexttest.MockContext(t, "user2/repo1/wiki/Home?action=_new")
-		ctx.SetParams("*", "Home")
+		ctx.SetPathParam("*", "Home")
 		contexttest.LoadUser(t, ctx, 2)
 		contexttest.LoadRepo(t, ctx, 1)
 		web.SetForm(ctx, &forms.NewWikiForm{
@@ -180,7 +192,7 @@ func TestEditWikiPost(t *testing.T) {
 		EditWikiPost(ctx)
 		assert.EqualValues(t, http.StatusSeeOther, ctx.Resp.Status())
 		assertWikiExists(t, ctx.Repo.Repository, wiki_service.UserTitleToWebPath("", title))
-		assert.Equal(t, wikiContent(t, ctx.Repo.Repository, wiki_service.UserTitleToWebPath("", title)), content)
+		assert.Equal(t, content, wikiContent(t, ctx.Repo.Repository, wiki_service.UserTitleToWebPath("", title)))
 		if title != "Home" {
 			assertWikiNotExists(t, ctx.Repo.Repository, "Home")
 		}
@@ -211,7 +223,7 @@ func TestWikiRaw(t *testing.T) {
 		unittest.PrepareTestEnv(t)
 
 		ctx, _ := contexttest.MockContext(t, "user2/repo1/wiki/raw/"+url.PathEscape(filepath))
-		ctx.SetParams("*", filepath)
+		ctx.SetPathParam("*", filepath)
 		contexttest.LoadUser(t, ctx, 2)
 		contexttest.LoadRepo(t, ctx, 1)
 		WikiRaw(ctx)
@@ -236,7 +248,7 @@ func TestDefaultWikiBranch(t *testing.T) {
 	assert.NoError(t, repo_model.UpdateRepositoryCols(db.DefaultContext, &repo_model.Repository{ID: 1, DefaultWikiBranch: "wrong-branch"}))
 
 	ctx, _ := contexttest.MockContext(t, "user2/repo1/wiki")
-	ctx.SetParams("*", "Home")
+	ctx.SetPathParam("*", "Home")
 	contexttest.LoadRepo(t, ctx, 1)
 	assert.Equal(t, "wrong-branch", ctx.Repo.Repository.DefaultWikiBranch)
 	Wiki(ctx) // after the visiting, the out-of-sync database record will update the branch name to "master"

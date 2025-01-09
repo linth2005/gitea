@@ -123,13 +123,12 @@ func Init() {
 			for _, indexerData := range items {
 				log.Trace("IndexerData Process Repo: %d", indexerData.RepoID)
 				if err := index(ctx, indexer, indexerData.RepoID); err != nil {
-					unhandled = append(unhandled, indexerData)
 					if !setting.IsInTesting {
 						log.Error("Codes indexer handler: index error for repo %v: %v", indexerData.RepoID, err)
 					}
 				}
 			}
-			return unhandled
+			return nil // do not re-queue the failed items, otherwise some broken repo will block the queue
 		}
 
 		indexerQueue = queue.CreateUniqueQueue(ctx, "code_indexer", handler)
@@ -178,12 +177,6 @@ func Init() {
 			}()
 
 			rIndexer = elasticsearch.NewIndexer(setting.Indexer.RepoConnStr, setting.Indexer.RepoIndexerName)
-			if err != nil {
-				cancel()
-				(*globalIndexer.Load()).Close()
-				close(waitChannel)
-				log.Fatal("PID: %d Unable to create the elasticsearch Repository Indexer connstr: %s Error: %v", os.Getpid(), setting.Indexer.RepoConnStr, err)
-			}
 			existed, err = rIndexer.Init(ctx)
 			if err != nil {
 				cancel()

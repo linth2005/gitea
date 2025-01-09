@@ -19,7 +19,6 @@ import (
 	issues_model "code.gitea.io/gitea/models/issues"
 	repo_model "code.gitea.io/gitea/models/repo"
 	user_model "code.gitea.io/gitea/models/user"
-	base_module "code.gitea.io/gitea/modules/base"
 	"code.gitea.io/gitea/modules/git"
 	"code.gitea.io/gitea/modules/gitrepo"
 	"code.gitea.io/gitea/modules/label"
@@ -107,7 +106,7 @@ func (g *GiteaLocalUploader) CreateRepo(repo *base.Repository, opts base.Migrate
 			Description:    repo.Description,
 			OriginalURL:    repo.OriginalURL,
 			GitServiceType: opts.GitServiceType,
-			IsPrivate:      opts.Private,
+			IsPrivate:      opts.Private || setting.Repository.ForcePrivate,
 			IsMirror:       opts.Mirror,
 			Status:         repo_model.RepositoryBeingMigrated,
 		})
@@ -409,7 +408,7 @@ func (g *GiteaLocalUploader) CreateIssues(issues ...*base.Issue) error {
 			RepoID:      g.repo.ID,
 			Repo:        g.repo,
 			Index:       issue.Number,
-			Title:       base_module.TruncateString(issue.Title, 255),
+			Title:       util.TruncateRunes(issue.Title, 255),
 			Content:     issue.Content,
 			Ref:         issue.Ref,
 			IsClosed:    issue.State == "closed",
@@ -760,10 +759,15 @@ func (g *GiteaLocalUploader) newPullRequest(pr *base.PullRequest) (*issues_model
 		pr.Updated = pr.Created
 	}
 
+	prTitle := pr.Title
+	if pr.IsDraft && !issues_model.HasWorkInProgressPrefix(pr.Title) {
+		prTitle = fmt.Sprintf("%s %s", setting.Repository.PullRequest.WorkInProgressPrefixes[0], pr.Title)
+	}
+
 	issue := issues_model.Issue{
 		RepoID:      g.repo.ID,
 		Repo:        g.repo,
-		Title:       pr.Title,
+		Title:       prTitle,
 		Index:       pr.Number,
 		Content:     pr.Content,
 		MilestoneID: milestoneID,
@@ -977,25 +981,24 @@ func (g *GiteaLocalUploader) Finish() error {
 }
 
 func (g *GiteaLocalUploader) remapUser(source user_model.ExternalUserMigrated, target user_model.ExternalUserRemappable) error {
-	var userid int64
+	var userID int64
 	var err error
 	if g.sameApp {
-		userid, err = g.remapLocalUser(source, target)
+		userID, err = g.remapLocalUser(source)
 	} else {
-		userid, err = g.remapExternalUser(source, target)
+		userID, err = g.remapExternalUser(source)
 	}
-
 	if err != nil {
 		return err
 	}
 
-	if userid > 0 {
-		return target.RemapExternalUser("", 0, userid)
+	if userID > 0 {
+		return target.RemapExternalUser("", 0, userID)
 	}
 	return target.RemapExternalUser(source.GetExternalName(), source.GetExternalID(), g.doer.ID)
 }
 
-func (g *GiteaLocalUploader) remapLocalUser(source user_model.ExternalUserMigrated, target user_model.ExternalUserRemappable) (int64, error) {
+func (g *GiteaLocalUploader) remapLocalUser(source user_model.ExternalUserMigrated) (int64, error) {
 	userid, ok := g.userMap[source.GetExternalID()]
 	if !ok {
 		name, err := user_model.GetUserNameByID(g.ctx, source.GetExternalID())
@@ -1013,7 +1016,7 @@ func (g *GiteaLocalUploader) remapLocalUser(source user_model.ExternalUserMigrat
 	return userid, nil
 }
 
-func (g *GiteaLocalUploader) remapExternalUser(source user_model.ExternalUserMigrated, target user_model.ExternalUserRemappable) (userid int64, err error) {
+func (g *GiteaLocalUploader) remapExternalUser(source user_model.ExternalUserMigrated) (userid int64, err error) {
 	userid, ok := g.userMap[source.GetExternalID()]
 	if !ok {
 		userid, err = user_model.GetUserIDByExternalUserID(g.ctx, g.gitServiceType.Name(), fmt.Sprintf("%d", source.GetExternalID()))

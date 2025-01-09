@@ -66,7 +66,7 @@ func TestDumpRestore(t *testing.T) {
 			Milestones:     true,
 			Comments:       true,
 			AuthToken:      token,
-			CloneAddr:      repo.CloneLink().HTTPS,
+			CloneAddr:      repo.CloneLinkGeneral(context.Background()).HTTPS,
 			RepoName:       reponame,
 		}
 		err = migrations.DumpRepository(ctx, basePath, repoOwner.Name, opts)
@@ -96,7 +96,7 @@ func TestDumpRestore(t *testing.T) {
 		// Phase 3: dump restored from the Gitea instance to the filesystem
 		//
 		opts.RepoName = newreponame
-		opts.CloneAddr = newrepo.CloneLink().HTTPS
+		opts.CloneAddr = newrepo.CloneLinkGeneral(context.Background()).HTTPS
 		err = migrations.DumpRepository(ctx, basePath, repoOwner.Name, opts)
 		assert.NoError(t, err)
 
@@ -237,7 +237,7 @@ func (c *compareDump) assertLoadFiles(beforeFilename, afterFilename string, t re
 		//
 		// Given []Something{} create afterPtr, beforePtr []*Something{}
 		//
-		sliceType := reflect.SliceOf(reflect.PtrTo(t.Elem()))
+		sliceType := reflect.SliceOf(reflect.PointerTo(t.Elem()))
 		beforeSlice := reflect.MakeSlice(sliceType, 0, 10)
 		beforePtr = reflect.New(beforeSlice.Type())
 		beforePtr.Elem().Set(beforeSlice)

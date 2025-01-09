@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -48,7 +49,7 @@ var microcmdUserCreate = &cli.Command{
 		},
 		&cli.BoolFlag{
 			Name:               "must-change-password",
-			Usage:              "Set to false to prevent forcing the user to change their password after initial login",
+			Usage:              "User must change password after initial login, defaults to true for all users except the first one (can be disabled by --must-change-password=false)",
 			DisableDefaultText: true,
 		},
 		&cli.IntFlag{
@@ -68,6 +69,10 @@ var microcmdUserCreate = &cli.Command{
 }
 
 func runCreateUser(c *cli.Context) error {
+	// this command highly depends on the many setting options (create org, visibility, etc.), so it must have a full setting load first
+	// duplicate setting loading should be safe at the moment, but it should be refactored & improved in the future.
+	setting.LoadSettings()
+
 	if err := argsSet(c, "email"); err != nil {
 		return err
 	}
@@ -91,11 +96,16 @@ func runCreateUser(c *cli.Context) error {
 		_, _ = fmt.Fprintf(c.App.ErrWriter, "--name flag is deprecated. Use --username instead.\n")
 	}
 
-	ctx, cancel := installSignals()
-	defer cancel()
-
-	if err := initDB(ctx); err != nil {
-		return err
+	ctx := c.Context
+	if !setting.IsInTesting {
+		// FIXME: need to refactor the "installSignals/initDB" related code later
+		// it doesn't make sense to call it in (almost) every command action function
+		var cancel context.CancelFunc
+		ctx, cancel = installSignals()
+		defer cancel()
+		if err := initDB(ctx); err != nil {
+			return err
+		}
 	}
 
 	var password string
@@ -123,8 +133,8 @@ func runCreateUser(c *cli.Context) error {
 		if err != nil {
 			return fmt.Errorf("IsTableNotEmpty: %w", err)
 		}
-		if !hasUserRecord && isAdmin {
-			// if this is the first admin being created, don't force to change password (keep the old behavior)
+		if !hasUserRecord {
+			// if this is the first one being created, don't force to change password (keep the old behavior)
 			mustChangePassword = false
 		}
 	}
@@ -152,7 +162,7 @@ func runCreateUser(c *cli.Context) error {
 		IsRestricted: restricted,
 	}
 
-	if err := user_model.CreateUser(ctx, u, overwriteDefault); err != nil {
+	if err := user_model.CreateUser(ctx, u, &user_model.Meta{}, overwriteDefault); err != nil {
 		return fmt.Errorf("CreateUser: %w", err)
 	}
 

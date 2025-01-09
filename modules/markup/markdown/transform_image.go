@@ -4,16 +4,12 @@
 package markdown
 
 import (
-	"strings"
-
 	"code.gitea.io/gitea/modules/markup"
-	giteautil "code.gitea.io/gitea/modules/util"
 
 	"github.com/yuin/goldmark/ast"
-	"github.com/yuin/goldmark/text"
 )
 
-func (g *ASTTransformer) transformImage(ctx *markup.RenderContext, v *ast.Image, reader text.Reader) {
+func (g *ASTTransformer) transformImage(ctx *markup.RenderContext, v *ast.Image) {
 	// Images need two things:
 	//
 	// 1. Their src needs to munged to be a real value
@@ -21,10 +17,7 @@ func (g *ASTTransformer) transformImage(ctx *markup.RenderContext, v *ast.Image,
 
 	// Check if the destination is a real link
 	if len(v.Destination) > 0 && !markup.IsFullURLBytes(v.Destination) {
-		v.Destination = []byte(giteautil.URLJoin(
-			ctx.Links.ResolveMediaLink(ctx.IsWiki),
-			strings.TrimLeft(string(v.Destination), "/"),
-		))
+		v.Destination = []byte(ctx.RenderHelper.ResolveLink(string(v.Destination), markup.LinkTypeMedia))
 	}
 
 	parent := v.Parent()
