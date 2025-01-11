@@ -5,6 +5,7 @@ package oauth2
 
 import (
 	"code.gitea.io/gitea/modules/setting"
+	"github.com/markbates/goth/providers/lark"
 
 	"github.com/markbates/goth"
 	"github.com/markbates/goth/providers/azuread"
@@ -104,6 +105,13 @@ func init() {
 		"microsoftonline", "Microsoft Online", nil,
 		func(clientID, secret, callbackURL string, scopes ...string) goth.Provider {
 			return microsoftonline.New(clientID, secret, callbackURL, scopes...)
+		},
+	))
+
+	RegisterGothProvider(NewSimpleProvider(
+		"lark", "飞书", []string{"contact:user.employee_id:readonly"},
+		func(clientID, secret, callbackURL string, scopes ...string) goth.Provider {
+			return lark.New(clientID, secret, callbackURL, scopes...)
 		},
 	))
 }

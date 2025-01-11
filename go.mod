@@ -37,6 +37,7 @@ require (
 	github.com/caddyserver/certmagic v0.24.0
 	github.com/charmbracelet/git-lfs-transfer v0.1.1-0.20251013092601-6327009efd21
 	github.com/chi-middleware/proxy v1.1.1
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dimiro1/reply v0.0.0-20200315094148-d0136a4c9e21
 	github.com/djherbis/buffer v1.2.0
 	github.com/djherbis/nio/v3 v3.0.1
@@ -299,6 +300,8 @@ replace github.com/hashicorp/go-version => github.com/6543/go-version v1.3.1
 replace github.com/nektos/act => gitea.com/gitea/act v0.261.7-0.20251003180512-ac6e4b751763
 
 replace git.sr.ht/~mariusor/go-xsd-duration => gitea.com/gitea/go-xsd-duration v0.0.0-20220703122237-02e73435a078
+
+replace github.com/markbates/goth v1.80.0 => github.com/linth2005/goth v0.0.0-20250110134317-67275c1a0a2f
 
 exclude github.com/gofrs/uuid v3.2.0+incompatible
 
