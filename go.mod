@@ -36,6 +36,7 @@ require (
 	github.com/caddyserver/certmagic v0.21.4
 	github.com/charmbracelet/git-lfs-transfer v0.2.0
 	github.com/chi-middleware/proxy v1.1.1
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dimiro1/reply v0.0.0-20200315094148-d0136a4c9e21
 	github.com/djherbis/buffer v1.2.0
 	github.com/djherbis/nio/v3 v3.0.1
@@ -325,6 +326,8 @@ replace github.com/charmbracelet/git-lfs-transfer => gitea.com/gitea/git-lfs-tra
 
 // TODO: This could be removed after https://github.com/mholt/archiver/pull/396 merged
 replace github.com/mholt/archiver/v3 => github.com/anchore/archiver/v3 v3.5.2
+
+replace github.com/markbates/goth v1.80.0 => github.com/linth2005/goth v0.0.0-20250110134317-67275c1a0a2f
 
 exclude github.com/gofrs/uuid v3.2.0+incompatible
 
