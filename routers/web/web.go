@@ -37,6 +37,7 @@ import (
 	"code.gitea.io/gitea/routers/web/repo"
 	"code.gitea.io/gitea/routers/web/repo/actions"
 	repo_setting "code.gitea.io/gitea/routers/web/repo/setting"
+	shared_actions "code.gitea.io/gitea/routers/web/shared/actions"
 	"code.gitea.io/gitea/routers/web/shared/project"
 	"code.gitea.io/gitea/routers/web/user"
 	user_setting "code.gitea.io/gitea/routers/web/user/setting"
@@ -442,10 +443,10 @@ func registerRoutes(m *web.Router) {
 
 	addSettingsVariablesRoutes := func() {
 		m.Group("/variables", func() {
-			m.Get("", repo_setting.Variables)
-			m.Post("/new", web.Bind(forms.EditVariableForm{}), repo_setting.VariableCreate)
-			m.Post("/{variable_id}/edit", web.Bind(forms.EditVariableForm{}), repo_setting.VariableUpdate)
-			m.Post("/{variable_id}/delete", repo_setting.VariableDelete)
+			m.Get("", shared_actions.Variables)
+			m.Post("/new", web.Bind(forms.EditVariableForm{}), shared_actions.VariableCreate)
+			m.Post("/{variable_id}/edit", web.Bind(forms.EditVariableForm{}), shared_actions.VariableUpdate)
+			m.Post("/{variable_id}/delete", shared_actions.VariableDelete)
 		})
 	}
 
@@ -459,11 +460,11 @@ func registerRoutes(m *web.Router) {
 
 	addSettingsRunnersRoutes := func() {
 		m.Group("/runners", func() {
-			m.Get("", repo_setting.Runners)
-			m.Combo("/{runnerid}").Get(repo_setting.RunnersEdit).
-				Post(web.Bind(forms.EditRunnerForm{}), repo_setting.RunnersEditPost)
-			m.Post("/{runnerid}/delete", repo_setting.RunnerDeletePost)
-			m.Post("/reset_registration_token", repo_setting.ResetRunnerRegistrationToken)
+			m.Get("", shared_actions.Runners)
+			m.Combo("/{runnerid}").Get(shared_actions.RunnersEdit).
+				Post(web.Bind(forms.EditRunnerForm{}), shared_actions.RunnersEditPost)
+			m.Post("/{runnerid}/delete", shared_actions.RunnerDeletePost)
+			m.Post("/reset_registration_token", shared_actions.ResetRunnerRegistrationToken)
 		})
 	}
 
@@ -681,7 +682,7 @@ func registerRoutes(m *web.Router) {
 		m.Get("/activate", auth.Activate)
 		m.Post("/activate", auth.ActivatePost)
 		m.Any("/activate_email", auth.ActivateEmail)
-		m.Get("/avatar/{username}/{size}", user.AvatarByUserName)
+		m.Get("/avatar/{username}/{size}", user.AvatarByUsernameSize)
 		m.Get("/recover_account", auth.ResetPasswd)
 		m.Post("/recover_account", auth.ResetPasswdPost)
 		m.Get("/forgot_password", auth.ForgotPasswd)
@@ -1132,7 +1133,7 @@ func registerRoutes(m *web.Router) {
 			})
 		})
 		m.Group("/actions", func() {
-			m.Get("", repo_setting.RedirectToDefaultSetting)
+			m.Get("", shared_actions.RedirectToDefaultSetting)
 			addSettingsRunnersRoutes()
 			addSettingsSecretsRoutes()
 			addSettingsVariablesRoutes()
@@ -1335,8 +1336,7 @@ func registerRoutes(m *web.Router) {
 			m.Get(".atom", feedEnabled, repo.TagsListFeedAtom)
 		}, ctxDataSet("EnableFeed", setting.Other.EnableFeed),
 			repo.MustBeNotEmpty, context.RepoRefByType(context.RepoRefTag, context.RepoRefByTypeOptions{IgnoreNotExistErr: true}))
-		m.Post("/tags/delete", repo.DeleteTag, reqSignIn,
-			repo.MustBeNotEmpty, context.RepoMustNotBeArchived(), reqRepoCodeWriter, context.RepoRef())
+		m.Post("/tags/delete", reqSignIn, repo.MustBeNotEmpty, context.RepoMustNotBeArchived(), reqRepoCodeWriter, repo.DeleteTag)
 	}, optSignIn, context.RepoAssignment, reqRepoCodeReader)
 	// end "/{username}/{reponame}": repo tags
 
@@ -1635,7 +1635,7 @@ func registerRoutes(m *web.Router) {
 	}
 
 	m.NotFound(func(w http.ResponseWriter, req *http.Request) {
-		ctx := context.GetWebContext(req)
+		ctx := context.GetWebContext(req.Context())
 		routing.UpdateFuncInfo(ctx, routing.GetFuncInfo(ctx.NotFound, "WebNotFound"))
 		ctx.NotFound("", nil)
 	})
