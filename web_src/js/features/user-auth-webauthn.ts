@@ -1,5 +1,5 @@
 import {encodeURLEncodedBase64, decodeURLEncodedBase64} from '../utils.ts';
-import {showElem} from '../utils/dom.ts';
+import {hideElem, showElem} from '../utils/dom.ts';
 import {GET, POST} from '../modules/fetch.ts';
 
 const {appSubUrl} = window.config;
@@ -9,6 +9,15 @@ export async function initUserAuthWebAuthn() {
   const elSignInPasskeyBtn = document.querySelector('.signin-passkey');
   if (!elPrompt && !elSignInPasskeyBtn) {
     return;
+  }
+
+  if (window.location.protocol === 'http:') {
+    // webauthn is only supported on secure contexts
+    const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    if (!isLocalhost) {
+      hideElem(elSignInPasskeyBtn);
+      return;
+    }
   }
 
   if (!detectWebAuthnSupport()) {
@@ -114,7 +123,7 @@ async function login2FA() {
   }
 }
 
-async function verifyAssertion(assertedCredential) {
+async function verifyAssertion(assertedCredential: any) { // TODO: Credential type does not work
   // Move data into Arrays in case it is super long
   const authData = new Uint8Array(assertedCredential.response.authenticatorData);
   const clientDataJSON = new Uint8Array(assertedCredential.response.clientDataJSON);
@@ -148,7 +157,7 @@ async function verifyAssertion(assertedCredential) {
   window.location.href = reply?.redirect ?? `${appSubUrl}/`;
 }
 
-async function webauthnRegistered(newCredential) {
+async function webauthnRegistered(newCredential: any) { // TODO: Credential type does not work
   const attestationObject = new Uint8Array(newCredential.response.attestationObject);
   const clientDataJSON = new Uint8Array(newCredential.response.clientDataJSON);
   const rawId = new Uint8Array(newCredential.rawId);

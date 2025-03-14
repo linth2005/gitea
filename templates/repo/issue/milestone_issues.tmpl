@@ -22,7 +22,7 @@
 			{{end}}
 		</div>
 		{{if .Milestone.RenderedContent}}
-		<div class="markup content tw-mb-4">
+		<div class="render-content markup tw-mb-4">
 				{{.Milestone.RenderedContent}}
 		</div>
 		{{end}}
@@ -50,7 +50,7 @@
 				{{if .TotalTrackedTime}}
 					<div data-tooltip-content='{{ctx.Locale.Tr "tracked_time_summary"}}'>
 						{{svg "octicon-clock"}}
-						{{.TotalTrackedTime | Sec2Time}}
+						{{.TotalTrackedTime | Sec2Hour}}
 					</div>
 				{{end}}
 			</div>
