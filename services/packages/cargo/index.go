@@ -213,7 +213,7 @@ func getOrCreateIndexRepository(ctx context.Context, doer, owner *user_model.Use
 		if errors.Is(err, util.ErrNotExist) {
 			repo, err = repo_service.CreateRepositoryDirectly(ctx, doer, owner, repo_service.CreateRepoOptions{
 				Name: IndexRepositoryName,
-			})
+			}, true)
 			if err != nil {
 				return nil, fmt.Errorf("CreateRepository: %w", err)
 			}
@@ -247,7 +247,7 @@ func createOrUpdateConfigFile(ctx context.Context, repo *repo_model.Repository, 
 		"Initialize Cargo Config",
 		func(t *files_service.TemporaryUploadRepository) error {
 			var b bytes.Buffer
-			err := json.NewEncoder(&b).Encode(BuildConfig(owner, setting.Service.RequireSignInView || owner.Visibility != structs.VisibleTypePublic || repo.IsPrivate))
+			err := json.NewEncoder(&b).Encode(BuildConfig(owner, setting.Service.RequireSignInViewStrict || owner.Visibility != structs.VisibleTypePublic || repo.IsPrivate))
 			if err != nil {
 				return err
 			}
@@ -306,11 +306,11 @@ func alterRepositoryContent(ctx context.Context, doer *user_model.User, repo *re
 		return err
 	}
 
-	return t.Push(ctx, doer, commitHash, repo.DefaultBranch)
+	return t.Push(ctx, doer, commitHash, repo.DefaultBranch, false)
 }
 
 func writeObjectToIndex(ctx context.Context, t *files_service.TemporaryUploadRepository, path string, r io.Reader) error {
-	hash, err := t.HashObject(ctx, r)
+	hash, err := t.HashObjectAndWrite(ctx, r)
 	if err != nil {
 		return err
 	}

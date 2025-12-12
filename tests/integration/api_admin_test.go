@@ -13,12 +13,12 @@ import (
 	auth_model "code.gitea.io/gitea/models/auth"
 	"code.gitea.io/gitea/models/unittest"
 	user_model "code.gitea.io/gitea/models/user"
+	"code.gitea.io/gitea/modules/glob"
 	"code.gitea.io/gitea/modules/json"
 	"code.gitea.io/gitea/modules/setting"
 	api "code.gitea.io/gitea/modules/structs"
 	"code.gitea.io/gitea/tests"
 
-	"github.com/gobwas/glob"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -88,7 +88,7 @@ func TestAPISudoUser(t *testing.T) {
 	normalUsername := "user2"
 	token := getUserToken(t, adminUsername, auth_model.AccessTokenScopeReadUser)
 
-	req := NewRequest(t, "GET", fmt.Sprintf("/api/v1/user?sudo=%s", normalUsername)).
+	req := NewRequest(t, "GET", "/api/v1/user?sudo="+normalUsername).
 		AddTokenAuth(token)
 	resp := MakeRequest(t, req, http.StatusOK)
 	var user api.User
@@ -103,7 +103,7 @@ func TestAPISudoUserForbidden(t *testing.T) {
 	normalUsername := "user2"
 
 	token := getUserToken(t, normalUsername, auth_model.AccessTokenScopeReadAdmin)
-	req := NewRequest(t, "GET", fmt.Sprintf("/api/v1/user?sudo=%s", adminUsername)).
+	req := NewRequest(t, "GET", "/api/v1/user?sudo="+adminUsername).
 		AddTokenAuth(token)
 	MakeRequest(t, req, http.StatusForbidden)
 }
@@ -193,7 +193,7 @@ func TestAPIEditUser(t *testing.T) {
 	defer tests.PrepareTestEnv(t)()
 	adminUsername := "user1"
 	token := getUserToken(t, adminUsername, auth_model.AccessTokenScopeWriteAdmin)
-	urlStr := fmt.Sprintf("/api/v1/admin/users/%s", "user2")
+	urlStr := "/api/v1/admin/users/" + "user2"
 
 	fullNameToChange := "Full Name User 2"
 	req := NewRequestWithValues(t, "PATCH", urlStr, map[string]string{
@@ -217,7 +217,7 @@ func TestAPIEditUser(t *testing.T) {
 
 	errMap := make(map[string]any)
 	json.Unmarshal(resp.Body.Bytes(), &errMap)
-	assert.EqualValues(t, "e-mail invalid [email: ]", errMap["message"].(string))
+	assert.Equal(t, "e-mail invalid [email: ]", errMap["message"].(string))
 
 	user2 = unittest.AssertExistsAndLoadBean(t, &user_model.User{LoginName: "user2"})
 	assert.False(t, user2.IsRestricted)
@@ -374,7 +374,7 @@ func TestAPIEditUser_NotAllowedEmailDomain(t *testing.T) {
 
 	adminUsername := "user1"
 	token := getUserToken(t, adminUsername, auth_model.AccessTokenScopeWriteAdmin)
-	urlStr := fmt.Sprintf("/api/v1/admin/users/%s", "user2")
+	urlStr := "/api/v1/admin/users/" + "user2"
 
 	newEmail := "user2@example1.com"
 	req := NewRequestWithJSON(t, "PATCH", urlStr, api.EditUserOption{
@@ -382,10 +382,12 @@ func TestAPIEditUser_NotAllowedEmailDomain(t *testing.T) {
 		SourceID:  0,
 		Email:     &newEmail,
 	}).AddTokenAuth(token)
-	resp := MakeRequest(t, req, http.StatusOK)
-	assert.Equal(t, "the domain of user email user2@example1.com conflicts with EMAIL_DOMAIN_ALLOWLIST or EMAIL_DOMAIN_BLOCKLIST", resp.Header().Get("X-Gitea-Warning"))
+	resp := MakeRequest(t, req, http.StatusBadRequest)
+	errMap := make(map[string]string)
+	assert.NoError(t, json.Unmarshal(resp.Body.Bytes(), &errMap))
+	assert.Equal(t, "the domain of user email user2@example1.com conflicts with EMAIL_DOMAIN_ALLOWLIST or EMAIL_DOMAIN_BLOCKLIST", errMap["message"])
 
-	originalEmail := "user2@example.com"
+	originalEmail := "user2@example.org"
 	req = NewRequestWithJSON(t, "PATCH", urlStr, api.EditUserOption{
 		LoginName: "user2",
 		SourceID:  0,

@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,6 +21,7 @@ import (
 
 	user_model "code.gitea.io/gitea/models/user"
 	webhook_model "code.gitea.io/gitea/models/webhook"
+	"code.gitea.io/gitea/modules/glob"
 	"code.gitea.io/gitea/modules/graceful"
 	"code.gitea.io/gitea/modules/hostmatcher"
 	"code.gitea.io/gitea/modules/log"
@@ -28,9 +30,8 @@ import (
 	"code.gitea.io/gitea/modules/queue"
 	"code.gitea.io/gitea/modules/setting"
 	"code.gitea.io/gitea/modules/timeutil"
+	"code.gitea.io/gitea/modules/util"
 	webhook_module "code.gitea.io/gitea/modules/webhook"
-
-	"github.com/gobwas/glob"
 )
 
 func newDefaultRequest(ctx context.Context, w *webhook_model.Webhook, t *webhook_model.HookTask) (req *http.Request, body []byte, err error) {
@@ -41,7 +42,7 @@ func newDefaultRequest(ctx context.Context, w *webhook_model.Webhook, t *webhook
 	case http.MethodPost:
 		switch w.ContentType {
 		case webhook_model.ContentTypeJSON:
-			req, err = http.NewRequest("POST", w.URL, strings.NewReader(t.PayloadContent))
+			req, err = http.NewRequest(http.MethodPost, w.URL, strings.NewReader(t.PayloadContent))
 			if err != nil {
 				return nil, nil, err
 			}
@@ -52,7 +53,7 @@ func newDefaultRequest(ctx context.Context, w *webhook_model.Webhook, t *webhook
 				"payload": []string{t.PayloadContent},
 			}
 
-			req, err = http.NewRequest("POST", w.URL, strings.NewReader(forms.Encode()))
+			req, err = http.NewRequest(http.MethodPost, w.URL, strings.NewReader(forms.Encode()))
 			if err != nil {
 				return nil, nil, err
 			}
@@ -69,7 +70,7 @@ func newDefaultRequest(ctx context.Context, w *webhook_model.Webhook, t *webhook
 		vals := u.Query()
 		vals["payload"] = []string{t.PayloadContent}
 		u.RawQuery = vals.Encode()
-		req, err = http.NewRequest("GET", u.String(), nil)
+		req, err = http.NewRequest(http.MethodGet, u.String(), nil)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -81,7 +82,7 @@ func newDefaultRequest(ctx context.Context, w *webhook_model.Webhook, t *webhook
 				return nil, nil, err
 			}
 			url := fmt.Sprintf("%s/%s", w.URL, url.PathEscape(txnID))
-			req, err = http.NewRequest("PUT", url, strings.NewReader(t.PayloadContent))
+			req, err = http.NewRequest(http.MethodPut, url, strings.NewReader(t.PayloadContent))
 			if err != nil {
 				return nil, nil, err
 			}
@@ -264,7 +265,7 @@ func Deliver(ctx context.Context, t *webhook_model.HookTask) error {
 		t.ResponseInfo.Headers[k] = strings.Join(vals, ",")
 	}
 
-	p, err := io.ReadAll(resp.Body)
+	p, err := util.ReadWithLimit(resp.Body, 1024*1024)
 	if err != nil {
 		t.ResponseInfo.Body = fmt.Sprintf("read body: %s", err)
 		return fmt.Errorf("unable to deliver webhook task[%d] in %s as unable to read response body: %w", t.ID, w.URL, err)
@@ -328,7 +329,7 @@ func Init() error {
 
 	hookQueue = queue.CreateUniqueQueue(graceful.GetManager().ShutdownContext(), "webhook_sender", handler)
 	if hookQueue == nil {
-		return fmt.Errorf("unable to create webhook_sender queue")
+		return errors.New("unable to create webhook_sender queue")
 	}
 	go graceful.GetManager().RunWithCancel(hookQueue)
 

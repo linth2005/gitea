@@ -47,7 +47,7 @@ func New(ctx context.Context, repo, op, token string, logger transfer.Logger) (t
 		return nil, err
 	}
 	server = server.JoinPath("api/internal/repo", repo, "info/lfs")
-	return &GiteaBackend{ctx: ctx, server: server, op: op, authToken: token, internalAuth: fmt.Sprintf("Bearer %s", setting.InternalToken), logger: logger}, nil
+	return &GiteaBackend{ctx: ctx, server: server, op: op, authToken: token, internalAuth: "Bearer " + setting.InternalToken, logger: logger}, nil
 }
 
 // Batch implements transfer.Backend
@@ -157,7 +157,7 @@ func (g *GiteaBackend) Batch(_ string, pointers []transfer.BatchItem, args trans
 }
 
 // Download implements transfer.Backend. The returned reader must be closed by the caller.
-func (g *GiteaBackend) Download(oid string, args transfer.Args) (io.ReadCloser, int64, error) {
+func (g *GiteaBackend) Download(oid string, args transfer.Args) (_ io.ReadCloser, _ int64, retErr error) {
 	idMapStr, exists := args[argID]
 	if !exists {
 		return nil, 0, ErrMissingID
@@ -188,7 +188,15 @@ func (g *GiteaBackend) Download(oid string, args transfer.Args) (io.ReadCloser, 
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to get response: %w", err)
 	}
-	// no need to close the body here by "defer resp.Body.Close()", see below
+	// We must return the ReaderCloser but not "ReadAll", to avoid OOM.
+	// "transfer.Backend" will check io.Closer interface and close the Body reader.
+	// So only close the Body when error occurs
+	defer func() {
+		if retErr != nil {
+			_ = resp.Body.Close()
+		}
+	}()
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, 0, statusCodeToErr(resp.StatusCode)
 	}
@@ -197,7 +205,6 @@ func (g *GiteaBackend) Download(oid string, args transfer.Args) (io.ReadCloser, 
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to parse content length: %w", err)
 	}
-	// transfer.Backend will check io.Closer interface and close this Body reader
 	return resp.Body, respSize, nil
 }
 

@@ -1,5 +1,5 @@
 import {isDocumentFragmentOrElementNode} from '../utils/dom.ts';
-import type {Promisable} from 'type-fest';
+import type {Promisable} from '../types.ts';
 import type {InitPerformanceTracer} from './init.ts';
 
 let globalSelectorObserverInited = false;
@@ -42,13 +42,15 @@ export function registerGlobalInitFunc<T extends HTMLElement>(name: string, hand
 }
 
 function callGlobalInitFunc(el: HTMLElement) {
-  const initFunc = el.getAttribute('data-global-init');
+  const initFunc = el.getAttribute('data-global-init')!;
   const func = globalInitFuncs[initFunc];
   if (!func) throw new Error(`Global init function "${initFunc}" not found`);
 
+  // when an element node is removed and added again, it should not be re-initialized again.
   type GiteaGlobalInitElement = Partial<HTMLElement> & {_giteaGlobalInited: boolean};
-  if ((el as GiteaGlobalInitElement)._giteaGlobalInited) throw new Error(`Global init function "${initFunc}" already executed`);
+  if ((el as GiteaGlobalInitElement)._giteaGlobalInited) return;
   (el as GiteaGlobalInitElement)._giteaGlobalInited = true;
+
   func(el);
 }
 
@@ -64,7 +66,7 @@ function attachGlobalEvents() {
   });
 }
 
-export function initGlobalSelectorObserver(perfTracer?: InitPerformanceTracer): void {
+export function initGlobalSelectorObserver(perfTracer: InitPerformanceTracer | null): void {
   if (globalSelectorObserverInited) throw new Error('initGlobalSelectorObserver() already called');
   globalSelectorObserverInited = true;
 

@@ -5,6 +5,7 @@
 package auth
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -40,6 +41,20 @@ var globalVars = sync.OnceValue(func() *globalVarsStruct {
 	}
 })
 
+type ErrUserAuthMessage string
+
+func (e ErrUserAuthMessage) Error() string {
+	return string(e)
+}
+
+func ErrAsUserAuthMessage(err error) (string, bool) {
+	var msg ErrUserAuthMessage
+	if errors.As(err, &msg) {
+		return msg.Error(), true
+	}
+	return "", false
+}
+
 // Init should be called exactly once when the application starts to allow plugins
 // to allocate necessary resources
 func Init() {
@@ -62,14 +77,14 @@ func (a *authPathDetector) isAPIPath() bool {
 
 // isAttachmentDownload check if request is a file download (GET) with URL to an attachment
 func (a *authPathDetector) isAttachmentDownload() bool {
-	return strings.HasPrefix(a.req.URL.Path, "/attachments/") && a.req.Method == "GET"
+	return strings.HasPrefix(a.req.URL.Path, "/attachments/") && a.req.Method == http.MethodGet
 }
 
 func (a *authPathDetector) isFeedRequest(req *http.Request) bool {
 	if !setting.Other.EnableFeed {
 		return false
 	}
-	if req.Method != "GET" {
+	if req.Method != http.MethodGet {
 		return false
 	}
 	return a.vars.feedPathRe.MatchString(req.URL.Path) || a.vars.feedRefPathRe.MatchString(req.URL.Path)

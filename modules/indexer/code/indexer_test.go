@@ -17,6 +17,7 @@ import (
 	"code.gitea.io/gitea/modules/indexer/code/internal"
 	"code.gitea.io/gitea/modules/setting"
 	"code.gitea.io/gitea/modules/test"
+	"code.gitea.io/gitea/modules/util"
 
 	_ "code.gitea.io/gitea/models"
 	_ "code.gitea.io/gitea/models/actions"
@@ -133,7 +134,7 @@ func testIndexer(name string, t *testing.T, indexer internal.Indexer) {
 				},
 			},
 			// Search for matches on both the contents and the filenames within the repo '62'.
-			// This scenario yields two results: the first result is baed on the file (cucumber.md) while the second is based on the contents
+			// This scenario yields two results: the first result is based on the file (cucumber.md) while the second is based on the contents
 			{
 				RepoIDs: []int64{62},
 				Keyword: "cucumber",
@@ -240,7 +241,7 @@ func testIndexer(name string, t *testing.T, indexer internal.Indexer) {
 				total, res, langs, err := indexer.Search(t.Context(), &internal.SearchOptions{
 					RepoIDs:    kw.RepoIDs,
 					Keyword:    kw.Keyword,
-					SearchMode: kw.SearchMode,
+					SearchMode: util.IfZero(kw.SearchMode, indexer_module.SearchModeWords),
 					Paginator: &db.ListOptions{
 						Page:     1,
 						PageSize: 10,
@@ -309,7 +310,7 @@ func TestESIndexAndSearch(t *testing.T) {
 		if indexer != nil {
 			indexer.Close()
 		}
-		assert.FailNow(t, "Unable to init ES indexer Error: %v", err)
+		require.NoError(t, err, "Unable to init ES indexer")
 	}
 
 	defer indexer.Close()

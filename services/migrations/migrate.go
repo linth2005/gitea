@@ -6,6 +6,7 @@ package migrations
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -15,6 +16,7 @@ import (
 	repo_model "code.gitea.io/gitea/models/repo"
 	system_model "code.gitea.io/gitea/models/system"
 	user_model "code.gitea.io/gitea/models/user"
+	"code.gitea.io/gitea/modules/container"
 	"code.gitea.io/gitea/modules/git"
 	"code.gitea.io/gitea/modules/hostmatcher"
 	"code.gitea.io/gitea/modules/log"
@@ -74,11 +76,9 @@ func IsMigrateURLAllowed(remoteURL string, doer *user_model.User) error {
 		return &git.ErrInvalidCloneAddr{Host: u.Host, IsProtocolInvalid: true, IsPermissionDenied: true, IsURLError: true}
 	}
 
-	hostName, _, err := net.SplitHostPort(u.Host)
-	if err != nil {
-		// u.Host can be "host" or "host:port"
-		err = nil //nolint
-		hostName = u.Host
+	hostName, _, errIgnored := net.SplitHostPort(u.Host)
+	if errIgnored != nil {
+		hostName = u.Host // u.Host can be "host" or "host:port"
 	}
 
 	// some users only use proxy, there is no DNS resolver. it's safe to ignore the LookupIP error
@@ -211,7 +211,7 @@ func migrateRepository(ctx context.Context, doer *user_model.User, downloader ba
 
 		if cloneURL.Scheme == "file" || cloneURL.Scheme == "" {
 			if cloneAddrURL.Scheme != "file" && cloneAddrURL.Scheme != "" {
-				return fmt.Errorf("repo info has changed from external to local filesystem")
+				return errors.New("repo info has changed from external to local filesystem")
 			}
 		}
 
@@ -328,6 +328,9 @@ func migrateRepository(ctx context.Context, doer *user_model.User, downloader ba
 		messenger("repo.migrate.migrating_issues")
 		issueBatchSize := uploader.MaxBatchInsertSize("issue")
 
+		// because when the migrating is running, some issues maybe removed, so after the next page
+		// some of issue maybe duplicated, so we need to record the inserted issue indexes
+		mapInsertedIssueIndexes := container.Set[int64]{}
 		for i := 1; ; i++ {
 			issues, isEnd, err := downloader.GetIssues(ctx, i, issueBatchSize)
 			if err != nil {
@@ -336,6 +339,14 @@ func migrateRepository(ctx context.Context, doer *user_model.User, downloader ba
 				}
 				log.Warn("migrating issues is not supported, ignored")
 				break
+			}
+			for i := 0; i < len(issues); i++ {
+				if mapInsertedIssueIndexes.Contains(issues[i].Number) {
+					issues = append(issues[:i], issues[i+1:]...)
+					i--
+					continue
+				}
+				mapInsertedIssueIndexes.Add(issues[i].Number)
 			}
 
 			if err := uploader.CreateIssues(ctx, issues...); err != nil {
@@ -382,6 +393,7 @@ func migrateRepository(ctx context.Context, doer *user_model.User, downloader ba
 		log.Trace("migrating pull requests and comments")
 		messenger("repo.migrate.migrating_pulls")
 		prBatchSize := uploader.MaxBatchInsertSize("pullrequest")
+		mapInsertedPRIndexes := container.Set[int64]{}
 		for i := 1; ; i++ {
 			prs, isEnd, err := downloader.GetPullRequests(ctx, i, prBatchSize)
 			if err != nil {
@@ -390,6 +402,14 @@ func migrateRepository(ctx context.Context, doer *user_model.User, downloader ba
 				}
 				log.Warn("migrating pull requests is not supported, ignored")
 				break
+			}
+			for i := 0; i < len(prs); i++ {
+				if mapInsertedPRIndexes.Contains(prs[i].Number) {
+					prs = append(prs[:i], prs[i+1:]...)
+					i--
+					continue
+				}
+				mapInsertedPRIndexes.Add(prs[i].Number)
 			}
 
 			if err := uploader.CreatePullRequests(ctx, prs...); err != nil {

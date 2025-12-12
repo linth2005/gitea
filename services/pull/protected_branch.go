@@ -8,7 +8,6 @@ import (
 
 	git_model "code.gitea.io/gitea/models/git"
 	repo_model "code.gitea.io/gitea/models/repo"
-	"code.gitea.io/gitea/modules/git"
 )
 
 func CreateOrUpdateProtectedBranch(ctx context.Context, repo *repo_model.Repository,
@@ -22,7 +21,7 @@ func CreateOrUpdateProtectedBranch(ctx context.Context, repo *repo_model.Reposit
 	isPlainRule := !git_model.IsRuleNameSpecial(protectBranch.RuleName)
 	var isBranchExist bool
 	if isPlainRule {
-		isBranchExist = git.IsBranchExist(ctx, repo.RepoPath(), protectBranch.RuleName)
+		isBranchExist, _ = git_model.IsBranchExist(ctx, repo.ID, protectBranch.RuleName)
 	}
 
 	if isBranchExist {

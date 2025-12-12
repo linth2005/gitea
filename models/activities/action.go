@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -125,12 +126,7 @@ func (at ActionType) String() string {
 }
 
 func (at ActionType) InActions(actions ...string) bool {
-	for _, action := range actions {
-		if action == at.String() {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(actions, at.String())
 }
 
 // Action represents user operation type and other information to
@@ -172,7 +168,10 @@ func (a *Action) TableIndices() []*schemas.Index {
 	cuIndex := schemas.NewIndex("c_u", schemas.IndexType)
 	cuIndex.AddColumn("user_id", "is_deleted")
 
-	indices := []*schemas.Index{actUserIndex, repoIndex, cudIndex, cuIndex}
+	actUserUserIndex := schemas.NewIndex("au_c_u", schemas.IndexType)
+	actUserUserIndex.AddColumn("act_user_id", "created_unix", "user_id")
+
+	indices := []*schemas.Index{actUserIndex, repoIndex, cudIndex, cuIndex, actUserUserIndex}
 
 	return indices
 }
@@ -188,7 +187,7 @@ func (a *Action) LoadActUser(ctx context.Context) {
 		return
 	}
 	var err error
-	a.ActUser, err = user_model.GetUserByID(ctx, a.ActUserID)
+	a.ActUser, err = user_model.GetPossibleUserByID(ctx, a.ActUserID)
 	if err == nil {
 		return
 	} else if user_model.IsErrUserNotExist(err) {
@@ -321,7 +320,7 @@ func (a *Action) GetCommentHTMLURL(ctx context.Context) string {
 		return "#"
 	}
 
-	return a.Issue.HTMLURL()
+	return a.Issue.HTMLURL(ctx)
 }
 
 // GetCommentLink returns link to action comment.
@@ -442,6 +441,7 @@ type GetFeedsOptions struct {
 	OnlyPerformedBy bool                   // only actions performed by requested user
 	IncludeDeleted  bool                   // include deleted actions
 	Date            string                 // the day we want activity for: YYYY-MM-DD
+	DontCount       bool                   // do counting in GetFeeds
 }
 
 // ActivityReadable return whether doer can read activities of user
@@ -526,7 +526,7 @@ func ActivityQueryCondition(ctx context.Context, opts GetFeedsOptions) (builder.
 
 	if opts.RequestedTeam != nil {
 		env := repo_model.AccessibleTeamReposEnv(organization.OrgFromUser(opts.RequestedUser), opts.RequestedTeam)
-		teamRepoIDs, err := env.RepoIDs(ctx, 1, opts.RequestedUser.NumRepos)
+		teamRepoIDs, err := env.RepoIDs(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("GetTeamRepositories: %w", err)
 		}

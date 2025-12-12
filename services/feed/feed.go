@@ -6,6 +6,7 @@ package feed
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	activities_model "code.gitea.io/gitea/models/activities"
 	"code.gitea.io/gitea/models/db"
@@ -14,7 +15,14 @@ import (
 	"code.gitea.io/gitea/models/unit"
 	user_model "code.gitea.io/gitea/models/user"
 	"code.gitea.io/gitea/modules/setting"
+	"code.gitea.io/gitea/modules/util"
 )
+
+func GetFeedsForDashboard(ctx context.Context, opts activities_model.GetFeedsOptions) (activities_model.ActionList, int, error) {
+	opts.DontCount = opts.RequestedTeam == nil && opts.Date == ""
+	results, cnt, err := activities_model.GetFeeds(ctx, opts)
+	return results, util.Iif(opts.DontCount, -1, int(cnt)), err
+}
 
 // GetFeeds returns actions according to the provided options
 func GetFeeds(ctx context.Context, opts activities_model.GetFeedsOptions) (activities_model.ActionList, int64, error) {
@@ -27,7 +35,18 @@ func GetFeeds(ctx context.Context, opts activities_model.GetFeedsOptions) (activ
 // * Organization action: UserID=100 (the repo's org), ActUserID=1
 // * Watcher action: UserID=20 (a user who is watching a repo), ActUserID=1
 func notifyWatchers(ctx context.Context, act *activities_model.Action, watchers []*repo_model.Watch, permCode, permIssue, permPR []bool) error {
-	// Add feed for actioner.
+	// MySQL has TEXT length limit 65535.
+	// Sometimes the content is "field1|field2|field3", sometimes the content is JSON (ActionMirrorSyncPush, ActionCommitRepo, ActionPushTag, etc...)
+	if left, right := util.EllipsisDisplayStringX(act.Content, 65535); right != "" {
+		if strings.HasPrefix(act.Content, `{"`) && strings.HasSuffix(act.Content, `}`) {
+			// FIXME: at the moment we can do nothing if the content is JSON and it is too long
+			act.Content = "{}"
+		} else {
+			act.Content = left
+		}
+	}
+
+	// Add feed for actor.
 	act.UserID = act.ActUserID
 	if err := db.Insert(ctx, act); err != nil {
 		return fmt.Errorf("insert new actioner: %w", err)
@@ -63,6 +82,7 @@ func notifyWatchers(ctx context.Context, act *activities_model.Action, watchers 
 			if !permPR[i] {
 				continue
 			}
+		default:
 		}
 
 		if err := db.Insert(ctx, act); err != nil {
@@ -73,7 +93,7 @@ func notifyWatchers(ctx context.Context, act *activities_model.Action, watchers 
 	return nil
 }
 
-// NotifyWatchersActions creates batch of actions for every watcher.
+// NotifyWatchers creates batch of actions for every watcher.
 func NotifyWatchers(ctx context.Context, acts ...*activities_model.Action) error {
 	return db.WithTx(ctx, func(ctx context.Context) error {
 		if len(acts) == 0 {

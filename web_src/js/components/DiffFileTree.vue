@@ -1,32 +1,25 @@
 <script lang="ts" setup>
 import DiffFileTreeItem from './DiffFileTreeItem.vue';
 import {toggleElem} from '../utils/dom.ts';
-import {diffTreeStore} from '../modules/stores.ts';
+import {diffTreeStore} from '../modules/diff-file.ts';
 import {setFileFolding} from '../features/file-fold.ts';
-import {computed, onMounted, onUnmounted} from 'vue';
-import {pathListToTree, mergeChildIfOnlyOneDir} from '../utils/filetree.ts';
+import {onMounted, onUnmounted} from 'vue';
 
 const LOCAL_STORAGE_KEY = 'diff_file_tree_visible';
 
 const store = diffTreeStore();
 
-const fileTree = computed(() => {
-  const result = pathListToTree(store.files);
-  mergeChildIfOnlyOneDir(result); // mutation
-  return result;
-});
-
 onMounted(() => {
   // Default to true if unset
   store.fileTreeIsVisible = localStorage.getItem(LOCAL_STORAGE_KEY) !== 'false';
-  document.querySelector('.diff-toggle-file-tree-button').addEventListener('click', toggleVisibility);
+  document.querySelector('.diff-toggle-file-tree-button')!.addEventListener('click', toggleVisibility);
 
   hashChangeListener();
   window.addEventListener('hashchange', hashChangeListener);
 });
 
 onUnmounted(() => {
-  document.querySelector('.diff-toggle-file-tree-button').removeEventListener('click', toggleVisibility);
+  document.querySelector('.diff-toggle-file-tree-button')!.removeEventListener('click', toggleVisibility);
   window.removeEventListener('hashchange', hashChangeListener);
 });
 
@@ -40,7 +33,7 @@ function expandSelectedFile() {
   if (store.selectedItem) {
     const box = document.querySelector(store.selectedItem);
     const folded = box?.getAttribute('data-folded') === 'true';
-    if (folded) setFileFolding(box, box.querySelector('.fold-file'), false);
+    if (folded) setFileFolding(box, box.querySelector('.fold-file')!, false);
   }
 }
 
@@ -50,15 +43,15 @@ function toggleVisibility() {
 
 function updateVisibility(visible: boolean) {
   store.fileTreeIsVisible = visible;
-  localStorage.setItem(LOCAL_STORAGE_KEY, store.fileTreeIsVisible);
+  localStorage.setItem(LOCAL_STORAGE_KEY, store.fileTreeIsVisible.toString());
   updateState(store.fileTreeIsVisible);
 }
 
 function updateState(visible: boolean) {
-  const btn = document.querySelector('.diff-toggle-file-tree-button');
+  const btn = document.querySelector('.diff-toggle-file-tree-button')!;
   const [toShow, toHide] = btn.querySelectorAll('.icon');
-  const tree = document.querySelector('#diff-file-tree');
-  const newTooltip = btn.getAttribute(visible ? 'data-hide-text' : 'data-show-text');
+  const tree = document.querySelector('#diff-file-tree')!;
+  const newTooltip = btn.getAttribute(visible ? 'data-hide-text' : 'data-show-text')!;
   btn.setAttribute('data-tooltip-content', newTooltip);
   toggleElem(tree, visible);
   toggleElem(toShow, !visible);
@@ -67,9 +60,9 @@ function updateState(visible: boolean) {
 </script>
 
 <template>
+  <!-- only render the tree if we're visible. in many cases this is something that doesn't change very often -->
   <div v-if="store.fileTreeIsVisible" class="diff-file-tree-items">
-    <!-- only render the tree if we're visible. in many cases this is something that doesn't change very often -->
-    <DiffFileTreeItem v-for="item in fileTree" :key="item.name" :item="item"/>
+    <DiffFileTreeItem v-for="item in store.diffFileTree.TreeRoot.Children" :key="item.FullName" :item="item"/>
   </div>
 </template>
 

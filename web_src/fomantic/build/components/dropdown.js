@@ -66,7 +66,7 @@ $.fn.dropdown = function(parameters) {
         moduleNamespace = 'module-' + namespace,
 
         $module         = $(this),
-        $context        = $(settings.context),
+        $context        = (typeof settings.context === 'string') ? $(document).find(settings.context) : $(settings.context), // GITEA-PATCH: use "jQuery.find(selector)" instead of "jQuery(selector)"
         $text           = $module.find(selector.text),
         $search         = $module.find(selector.search),
         $sizer          = $module.find(selector.sizer),
@@ -525,6 +525,7 @@ $.fn.dropdown = function(parameters) {
               return true;
             }
             if(settings.onShow.call(element) !== false) {
+              $module.fomanticExt.onDropdownAfterFiltered.call(element); // GITEA-PATCH: callback to correctly handle the filtered items
               module.animate.show(function() {
                 if( module.can.click() ) {
                   module.bind.intent();
@@ -752,6 +753,7 @@ $.fn.dropdown = function(parameters) {
               if(module.is.searchSelection() && module.can.show() && module.is.focusedOnSearch() ) {
                 module.show();
               }
+              $module.fomanticExt.onDropdownAfterFiltered.call(element); // GITEA-PATCH: callback to correctly handle the filtered items
             }
           ;
           if(settings.useLabels && module.has.maxSelections()) {
@@ -1130,7 +1132,11 @@ $.fn.dropdown = function(parameters) {
           icon: {
             click: function(event) {
               iconClicked=true;
-              if(module.has.search()) {
+              // GITEA-PATCH: official dropdown doesn't support the search input in menu
+              // so we need to make the menu could be shown when the search input is in menu and user clicks the icon
+              const searchInputInMenu = Boolean($menu.find('.search > input').length);
+              if(module.has.search() && !searchInputInMenu) {
+                // the search input is in the dropdown element (but not in the popup menu), try to focus it
                 if(!module.is.active()) {
                     if(settings.showOnFocus){
                       module.focusSearch();
@@ -4073,7 +4079,7 @@ $.fn.dropdown.settings = {
     search       : 'input.search, .menu > .search > input, .menu input.search',
     sizer        : '> span.sizer',
     text         : '> .text:not(.icon)',
-    unselectable : '.disabled, .filtered',
+    unselectable : '.disabled, .filtered, .tw-hidden', // GITEA-PATCH: tw-hidden hides the item so it is also unselectable
     clearIcon    : '> .remove.icon'
   },
 

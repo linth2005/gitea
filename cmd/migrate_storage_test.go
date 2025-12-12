@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"code.gitea.io/gitea/models/db"
 	"code.gitea.io/gitea/models/packages"
 	"code.gitea.io/gitea/models/unittest"
 	user_model "code.gitea.io/gitea/models/user"
@@ -30,7 +29,7 @@ func TestMigratePackages(t *testing.T) {
 	assert.NoError(t, err)
 	defer buf.Close()
 
-	v, f, err := packages_service.CreatePackageAndAddFile(db.DefaultContext, &packages_service.PackageCreationInfo{
+	v, f, err := packages_service.CreatePackageAndAddFile(t.Context(), &packages_service.PackageCreationInfo{
 		PackageInfo: packages_service.PackageInfo{
 			Owner:       creator,
 			PackageType: packages.TypeGeneric,
@@ -69,6 +68,6 @@ func TestMigratePackages(t *testing.T) {
 	entries, err := os.ReadDir(p)
 	assert.NoError(t, err)
 	assert.Len(t, entries, 2)
-	assert.EqualValues(t, "01", entries[0].Name())
-	assert.EqualValues(t, "tmp", entries[1].Name())
+	assert.Equal(t, "01", entries[0].Name())
+	assert.Equal(t, "tmp", entries[1].Name())
 }

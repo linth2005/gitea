@@ -34,12 +34,12 @@ func TestParseGitURLs(t *testing.T) {
 			},
 		},
 		{
-			kase: "git@[fe80:14fc:cec5:c174:d88%2510]:go-gitea/gitea.git",
+			kase: "git@[fe80::14fc:cec5:c174:d88%2510]:go-gitea/gitea.git",
 			expected: &GitURL{
 				URL: &url.URL{
 					Scheme: "ssh",
 					User:   url.User("git"),
-					Host:   "[fe80:14fc:cec5:c174:d88%10]",
+					Host:   "[fe80::14fc:cec5:c174:d88%10]",
 					Path:   "go-gitea/gitea.git",
 				},
 				extraMark: 1,
@@ -137,11 +137,11 @@ func TestParseGitURLs(t *testing.T) {
 			},
 		},
 		{
-			kase: "https://[fe80:14fc:cec5:c174:d88%2510]:20/go-gitea/gitea.git",
+			kase: "https://[fe80::14fc:cec5:c174:d88%2510]:20/go-gitea/gitea.git",
 			expected: &GitURL{
 				URL: &url.URL{
 					Scheme: "https",
-					Host:   "[fe80:14fc:cec5:c174:d88%10]:20",
+					Host:   "[fe80::14fc:cec5:c174:d88%10]:20",
 					Path:   "/go-gitea/gitea.git",
 				},
 				extraMark: 0,
@@ -165,8 +165,8 @@ func TestParseGitURLs(t *testing.T) {
 		t.Run(kase.kase, func(t *testing.T) {
 			u, err := ParseGitURL(kase.kase)
 			assert.NoError(t, err)
-			assert.EqualValues(t, kase.expected.extraMark, u.extraMark)
-			assert.EqualValues(t, *kase.expected, *u)
+			assert.Equal(t, kase.expected.extraMark, u.extraMark)
+			assert.Equal(t, *kase.expected, *u)
 		})
 	}
 }
