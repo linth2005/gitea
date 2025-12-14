@@ -9,6 +9,8 @@ ARG TAGS="sqlite sqlite_unlock_notify"
 ENV TAGS="bindata timetzdata $TAGS"
 ARG CGO_EXTRA_CFLAGS
 
+COPY .npmrc /root/.npmrc
+
 # Build deps
 RUN apk --no-cache add \
     build-base \
@@ -16,8 +18,7 @@ RUN apk --no-cache add \
     nodejs \
     npm \
     && npm install -g pnpm@10 \
-    && rm -rf /var/cache/apk/* \
-COPY .npmrc /root/.npmrc
+    && rm -rf /var/cache/apk/*
 
 # Setup repo
 COPY . ${GOPATH}/src/code.gitea.io/gitea
@@ -25,7 +26,9 @@ WORKDIR ${GOPATH}/src/code.gitea.io/gitea
 
 # Checkout version if set
 RUN if [ -n "${GITEA_VERSION}" ]; then git checkout "${GITEA_VERSION}"; fi \
- && make clean-all build
+ && make clean-all \
+ && make generate \
+ && make build
 
 # Begin env-to-ini build
 RUN go build contrib/environment-to-ini/environment-to-ini.go
